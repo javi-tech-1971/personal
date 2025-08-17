@@ -1,12 +1,28 @@
- name: GitHub Pages
+# Nombre del Workflow
+name: Deploy Hugo site to Pages
 
 on:
+  # Se ejecuta en pushes a la rama main
   push:
     branches:
       - main
+  # Permite ejecutarlo manualmente desde la pestaña Actions
+  workflow_dispatch:
+
+# Permisos especiales que necesita el workflow para desplegar en GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Permite un solo despliegue concurrente, cancelando los antiguos
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  # ---- Job de Construcción ----
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -21,12 +37,25 @@ jobs:
           hugo-version: '0.128.2'
           extended: true
 
-      - name: Build site
+      - name: Build with Hugo
         run: hugo --minify
 
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v4
-        if: github.ref == 'refs/heads/main'
+      - name: Upload artifact
+        # Sube el resultado de la carpeta /public como un artefacto
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
+          path: ./public
+
+  # ---- Job de Despliegue ----
+  deploy:
+    # Necesita que el job 'build' termine correctamente
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        # Usa la acción oficial para desplegar el artefacto
+        uses: actions/deploy-pages@v4 
